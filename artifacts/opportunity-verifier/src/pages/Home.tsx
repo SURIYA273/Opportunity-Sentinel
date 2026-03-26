@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ShieldCheck, Link as LinkIcon, Mail, Image as ImageIcon, UploadCloud, AlertCircle } from "lucide-react";
+import { ShieldCheck, Link as LinkIcon, Mail, Image as ImageIcon, UploadCloud, AlertCircle, Globe } from "lucide-react";
 import { useAnalyzeUrl, useAnalyzeText, useAnalyzeImage } from "@workspace/api-client-react";
 import { StepLoader } from "@/components/StepLoader";
 import { VerdictCard, type UnifiedResult } from "@/components/VerdictCard";
