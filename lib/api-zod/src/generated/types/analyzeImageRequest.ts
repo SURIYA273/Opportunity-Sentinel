@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.2.0
  */
 
-export interface HealthStatus {
-  status: string;
+export interface AnalyzeImageRequest {
+  /** Base64-encoded image (data URI or raw base64) */
+  imageBase64: string;
 }

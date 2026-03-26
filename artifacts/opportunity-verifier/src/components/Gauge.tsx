@@ -47,18 +47,18 @@ export function Gauge({ value, max = 100, size = 240, strokeWidth = 16 }: GaugeP
           animate={{ strokeDashoffset }}
           transition={{ duration: 1.5, ease: "easeOut", delay: 0.2 }}
           style={{
-            filter: `drop-shadow(0px 0px 8px ${color}40)`,
+            filter: `drop-shadow(0px 0px 12px ${color}60)`,
           }}
         />
       </svg>
       
-      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 text-center translate-y-4">
+      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 text-center translate-y-6">
         <motion.span 
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 1 }}
-          className="text-5xl font-display font-bold"
-          style={{ color }}
+          className="text-6xl font-display font-extrabold"
+          style={{ color, textShadow: `0 0 20px ${color}50` }}
         >
           {Math.round(value)}
         </motion.span>

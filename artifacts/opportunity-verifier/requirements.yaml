@@ -1,5 +1,5 @@
 packages:
-  "framer-motion": "For smooth step-by-step loading animations and results reveal"
+  "framer-motion": "For smooth step-by-step loading animations, tab transitions, and gauge charts"
   "clsx": "For conditional class names"
   "tailwind-merge": "For merging tailwind classes safely"
   "lucide-react": "For UI icons"
@@ -10,5 +10,4 @@ images:
     aspect_ratio: "16:9"
 
 notes:
-  - Expects /api/analyze to return AnalyzeResult schema
-  - Simulates a minimum loading time to show the verification steps animation
+  - Uses @workspace/api-client-react for useAnalyzeUrl, useAnalyzeText, and useAnalyzeImage

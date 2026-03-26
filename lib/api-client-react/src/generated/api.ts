@@ -3,7 +3,7 @@
  * Do not edit manually.
  * Api
  * Student Opportunity Verifier API
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.2.0
  */
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type {
@@ -17,10 +17,13 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AnalyzeImageRequest,
   AnalyzeRequest,
   AnalyzeResult,
+  AnalyzeTextRequest,
   ErrorResponse,
   HealthStatus,
+  TextAnalysisResult,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -33,7 +36,6 @@ type Awaited<O> = O extends AwaitedInput<infer T> ? T : never;
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 /**
- * Returns server health status
  * @summary Health check
  */
 export const getHealthCheckUrl = () => {
@@ -109,7 +111,6 @@ export function useHealthCheck<
 }
 
 /**
- * Analyzes a given URL for SSL, WHOIS, keywords, data harvesting, and domain reputation
  * @summary Analyze a URL for scam indicators
  */
 export const getAnalyzeUrlUrl = () => {
@@ -193,4 +194,176 @@ export const useAnalyzeUrl = <
   TContext
 > => {
   return useMutation(getAnalyzeUrlMutationOptions(options));
+};
+
+/**
+ * @summary Analyze pasted email or social media text
+ */
+export const getAnalyzeTextUrl = () => {
+  return `/api/analyze/text`;
+};
+
+export const analyzeText = async (
+  analyzeTextRequest: AnalyzeTextRequest,
+  options?: RequestInit,
+): Promise<TextAnalysisResult> => {
+  return customFetch<TextAnalysisResult>(getAnalyzeTextUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(analyzeTextRequest),
+  });
+};
+
+export const getAnalyzeTextMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof analyzeText>>,
+    TError,
+    { data: BodyType<AnalyzeTextRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof analyzeText>>,
+  TError,
+  { data: BodyType<AnalyzeTextRequest> },
+  TContext
+> => {
+  const mutationKey = ["analyzeText"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof analyzeText>>,
+    { data: BodyType<AnalyzeTextRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return analyzeText(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AnalyzeTextMutationResult = NonNullable<
+  Awaited<ReturnType<typeof analyzeText>>
+>;
+export type AnalyzeTextMutationBody = BodyType<AnalyzeTextRequest>;
+export type AnalyzeTextMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Analyze pasted email or social media text
+ */
+export const useAnalyzeText = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof analyzeText>>,
+    TError,
+    { data: BodyType<AnalyzeTextRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof analyzeText>>,
+  TError,
+  { data: BodyType<AnalyzeTextRequest> },
+  TContext
+> => {
+  return useMutation(getAnalyzeTextMutationOptions(options));
+};
+
+/**
+ * @summary Analyze an image (OCR + scam scan)
+ */
+export const getAnalyzeImageUrl = () => {
+  return `/api/analyze/image`;
+};
+
+export const analyzeImage = async (
+  analyzeImageRequest: AnalyzeImageRequest,
+  options?: RequestInit,
+): Promise<TextAnalysisResult> => {
+  return customFetch<TextAnalysisResult>(getAnalyzeImageUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(analyzeImageRequest),
+  });
+};
+
+export const getAnalyzeImageMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof analyzeImage>>,
+    TError,
+    { data: BodyType<AnalyzeImageRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof analyzeImage>>,
+  TError,
+  { data: BodyType<AnalyzeImageRequest> },
+  TContext
+> => {
+  const mutationKey = ["analyzeImage"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof analyzeImage>>,
+    { data: BodyType<AnalyzeImageRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return analyzeImage(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AnalyzeImageMutationResult = NonNullable<
+  Awaited<ReturnType<typeof analyzeImage>>
+>;
+export type AnalyzeImageMutationBody = BodyType<AnalyzeImageRequest>;
+export type AnalyzeImageMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Analyze an image (OCR + scam scan)
+ */
+export const useAnalyzeImage = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof analyzeImage>>,
+    TError,
+    { data: BodyType<AnalyzeImageRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof analyzeImage>>,
+  TError,
+  { data: BodyType<AnalyzeImageRequest> },
+  TContext
+> => {
+  return useMutation(getAnalyzeImageMutationOptions(options));
 };

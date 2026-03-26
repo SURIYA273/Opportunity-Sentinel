@@ -3,15 +3,33 @@
  * Do not edit manually.
  * Api
  * Student Opportunity Verifier API
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.2.0
  */
 export interface HealthStatus {
   status: string;
 }
 
 export interface AnalyzeRequest {
-  /** The URL to analyze */
   url: string;
+}
+
+export type AnalyzeTextRequestInputType =
+  (typeof AnalyzeTextRequestInputType)[keyof typeof AnalyzeTextRequestInputType];
+
+export const AnalyzeTextRequestInputType = {
+  email: "email",
+  text: "text",
+  image: "image",
+} as const;
+
+export interface AnalyzeTextRequest {
+  text: string;
+  inputType?: AnalyzeTextRequestInputType;
+}
+
+export interface AnalyzeImageRequest {
+  /** Base64-encoded image (data URI or raw base64) */
+  imageBase64: string;
 }
 
 export type ScamFlagSeverity =
@@ -24,18 +42,14 @@ export const ScamFlagSeverity = {
 } as const;
 
 export interface ScamFlag {
-  /** Category of the flag (e.g. 'SSL', 'Domain Age', 'Keywords', 'Data Harvesting', 'Domain Reputation') */
   category: string;
   severity: ScamFlagSeverity;
-  /** Human-readable description of the flag */
   message: string;
 }
 
 export interface AnalyzeResult {
   url: string;
-  /** Trust score from 0 to 100 */
   trustScore: number;
-  /** Safety grade (A+, A, B, C, D, F) */
   grade: string;
   flags: ScamFlag[];
   sslValid: boolean;
@@ -43,8 +57,17 @@ export interface AnalyzeResult {
   domainExtension: string;
   inputFieldCount: number;
   scamKeywordsFound: string[];
-  /** One-sentence summary verdict */
   summary: string;
+}
+
+export interface TextAnalysisResult {
+  trustScore: number;
+  grade: string;
+  flags: ScamFlag[];
+  scamKeywordsFound: string[];
+  summary: string;
+  inputType: string;
+  extractedText?: string | null;
 }
 
 export interface ErrorResponse {

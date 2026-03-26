@@ -1,12 +1,14 @@
 import os
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel
 from typing import Optional
 
 from analyzer import analyze_url
+from text_analyzer import analyze_text
+from image_analyzer import analyze_image
 
-app = FastAPI(title="Student Opportunity Verifier API", version="1.0.0")
+app = FastAPI(title="Student Opportunity Verifier API", version="2.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -17,46 +19,55 @@ app.add_middleware(
 )
 
 
+# ─── Request / Response Models ────────────────────────────────────────────────
+
 class AnalyzeRequest(BaseModel):
     url: str
 
+class AnalyzeTextRequest(BaseModel):
+    text: str
+    inputType: str = "text"   # "email" | "text" | "image"
 
-class ScamFlag(BaseModel):
-    category: str
-    severity: str
-    message: str
+class AnalyzeImageRequest(BaseModel):
+    imageBase64: str          # data URI or raw base64
 
 
-class AnalyzeResponse(BaseModel):
-    url: str
-    trustScore: float
-    grade: str
-    flags: list[ScamFlag]
-    sslValid: bool
-    domainAgeDays: Optional[float] = None
-    domainExtension: str
-    inputFieldCount: float
-    scamKeywordsFound: list[str]
-    summary: str
-
+# ─── Routes ───────────────────────────────────────────────────────────────────
 
 @app.get("/api/healthz")
 async def health_check():
     return {"status": "ok"}
 
 
-@app.post("/api/analyze", response_model=AnalyzeResponse)
-async def analyze(request: AnalyzeRequest):
+@app.post("/api/analyze")
+async def analyze_url_endpoint(request: AnalyzeRequest):
     if not request.url or not request.url.strip():
         raise HTTPException(status_code=400, detail="URL is required")
-
     url = request.url.strip()
     if not url.startswith(("http://", "https://")):
         url = "https://" + url
-
     try:
-        result = analyze_url(url)
-        return result
+        return analyze_url(url)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/analyze/text")
+async def analyze_text_endpoint(request: AnalyzeTextRequest):
+    if not request.text or not request.text.strip():
+        raise HTTPException(status_code=400, detail="Text is required")
+    try:
+        return analyze_text(request.text.strip(), input_type=request.inputType)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/analyze/image")
+async def analyze_image_endpoint(request: AnalyzeImageRequest):
+    if not request.imageBase64 or not request.imageBase64.strip():
+        raise HTTPException(status_code=400, detail="imageBase64 is required")
+    try:
+        return analyze_image(request.imageBase64.strip())
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

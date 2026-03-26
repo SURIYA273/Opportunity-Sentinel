@@ -3,14 +3,12 @@
  * Do not edit manually.
  * Api
  * Student Opportunity Verifier API
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.2.0
  */
 import type { ScamFlagSeverity } from "./scamFlagSeverity";
 
 export interface ScamFlag {
-  /** Category of the flag (e.g. 'SSL', 'Domain Age', 'Keywords', 'Data Harvesting', 'Domain Reputation') */
   category: string;
   severity: ScamFlagSeverity;
-  /** Human-readable description of the flag */
   message: string;
 }

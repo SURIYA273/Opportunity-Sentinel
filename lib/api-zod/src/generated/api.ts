@@ -3,12 +3,11 @@
  * Do not edit manually.
  * Api
  * Student Opportunity Verifier API
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.2.0
  */
 import * as zod from "zod";
 
 /**
- * Returns server health status
  * @summary Health check
  */
 export const HealthCheckResponse = zod.object({
@@ -16,26 +15,21 @@ export const HealthCheckResponse = zod.object({
 });
 
 /**
- * Analyzes a given URL for SSL, WHOIS, keywords, data harvesting, and domain reputation
  * @summary Analyze a URL for scam indicators
  */
 export const AnalyzeUrlBody = zod.object({
-  url: zod.string().describe("The URL to analyze"),
+  url: zod.string(),
 });
 
 export const AnalyzeUrlResponse = zod.object({
   url: zod.string(),
-  trustScore: zod.number().describe("Trust score from 0 to 100"),
-  grade: zod.string().describe("Safety grade (A+, A, B, C, D, F)"),
+  trustScore: zod.number(),
+  grade: zod.string(),
   flags: zod.array(
     zod.object({
-      category: zod
-        .string()
-        .describe(
-          "Category of the flag (e.g. 'SSL', 'Domain Age', 'Keywords', 'Data Harvesting', 'Domain Reputation')",
-        ),
+      category: zod.string(),
       severity: zod.enum(["low", "medium", "high"]),
-      message: zod.string().describe("Human-readable description of the flag"),
+      message: zod.string(),
     }),
   ),
   sslValid: zod.boolean(),
@@ -43,5 +37,58 @@ export const AnalyzeUrlResponse = zod.object({
   domainExtension: zod.string(),
   inputFieldCount: zod.number(),
   scamKeywordsFound: zod.array(zod.string()),
-  summary: zod.string().describe("One-sentence summary verdict"),
+  summary: zod.string(),
+});
+
+/**
+ * @summary Analyze pasted email or social media text
+ */
+export const analyzeTextBodyInputTypeDefault = `text`;
+
+export const AnalyzeTextBody = zod.object({
+  text: zod.string(),
+  inputType: zod
+    .enum(["email", "text", "image"])
+    .default(analyzeTextBodyInputTypeDefault),
+});
+
+export const AnalyzeTextResponse = zod.object({
+  trustScore: zod.number(),
+  grade: zod.string(),
+  flags: zod.array(
+    zod.object({
+      category: zod.string(),
+      severity: zod.enum(["low", "medium", "high"]),
+      message: zod.string(),
+    }),
+  ),
+  scamKeywordsFound: zod.array(zod.string()),
+  summary: zod.string(),
+  inputType: zod.string(),
+  extractedText: zod.string().nullish(),
+});
+
+/**
+ * @summary Analyze an image (OCR + scam scan)
+ */
+export const AnalyzeImageBody = zod.object({
+  imageBase64: zod
+    .string()
+    .describe("Base64-encoded image (data URI or raw base64)"),
+});
+
+export const AnalyzeImageResponse = zod.object({
+  trustScore: zod.number(),
+  grade: zod.string(),
+  flags: zod.array(
+    zod.object({
+      category: zod.string(),
+      severity: zod.enum(["low", "medium", "high"]),
+      message: zod.string(),
+    }),
+  ),
+  scamKeywordsFound: zod.array(zod.string()),
+  summary: zod.string(),
+  inputType: zod.string(),
+  extractedText: zod.string().nullish(),
 });

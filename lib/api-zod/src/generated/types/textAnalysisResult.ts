@@ -7,15 +7,12 @@
  */
 import type { ScamFlag } from "./scamFlag";
 
-export interface AnalyzeResult {
-  url: string;
+export interface TextAnalysisResult {
   trustScore: number;
   grade: string;
   flags: ScamFlag[];
-  sslValid: boolean;
-  domainAgeDays?: number | null;
-  domainExtension: string;
-  inputFieldCount: number;
   scamKeywordsFound: string[];
   summary: string;
+  inputType: string;
+  extractedText?: string | null;
 }

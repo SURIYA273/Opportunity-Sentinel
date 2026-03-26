@@ -3,12 +3,16 @@
  * Do not edit manually.
  * Api
  * Student Opportunity Verifier API
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.2.0
  */
 
+export * from "./analyzeImageRequest";
 export * from "./analyzeRequest";
 export * from "./analyzeResult";
+export * from "./analyzeTextRequest";
+export * from "./analyzeTextRequestInputType";
 export * from "./errorResponse";
 export * from "./healthStatus";
 export * from "./scamFlag";
 export * from "./scamFlagSeverity";
+export * from "./textAnalysisResult";

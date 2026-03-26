@@ -1,379 +1,390 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useAnalyzeUrl } from "@workspace/api-client-react";
-import { type AnalyzeResult } from "@workspace/api-client-react/src/generated/api.schemas";
-import { 
-  ShieldAlert,
-  ShieldCheck,
-  Search, 
-  Lock, 
-  Globe, 
-  FileText, 
-  Database,
-  ArrowRight,
-  AlertTriangle,
-  Info,
-  CheckCircle,
-  XCircle
-} from "lucide-react";
+import { ShieldCheck, Link as LinkIcon, Mail, Image as ImageIcon, UploadCloud, AlertCircle } from "lucide-react";
+import { useAnalyzeUrl, useAnalyzeText, useAnalyzeImage } from "@workspace/api-client-react";
 import { StepLoader } from "@/components/StepLoader";
-import { Gauge } from "@/components/Gauge";
-import { cn, getScoreColor } from "@/lib/utils";
+import { VerdictCard, type UnifiedResult } from "@/components/VerdictCard";
+import { cn } from "@/lib/utils";
+
+const URL_STEPS = [
+  "Fetching URL metadata...",
+  "Checking SSL Certificate...",
+  "Reading WHOIS Records...",
+  "Analyzing Page Content...",
+  "Checking Contextual Keywords...",
+  "Calculating Trust Score..."
+];
+
+const TEXT_STEPS = [
+  "Reading text content...",
+  "Checking sender domains...",
+  "Scanning for hard scam keywords...",
+  "Analyzing urgency & tone...",
+  "Calculating Trust Score..."
+];
+
+const IMAGE_STEPS = [
+  "Uploading image to server...",
+  "Running OCR text extraction...",
+  "Scanning extracted text...",
+  "Checking for scam patterns...",
+  "Calculating Trust Score..."
+];
 
 export default function Home() {
+  const [activeTab, setActiveTab] = useState<"url" | "text" | "image">("url");
+  const [result, setResult] = useState<UnifiedResult | null>(null);
+  const [isSimulating, setIsSimulating] = useState(false);
+  const [pendingResult, setPendingResult] = useState<UnifiedResult | null>(null);
+
+  // URL State
   const [url, setUrl] = useState("");
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [result, setResult] = useState<AnalyzeResult | null>(null);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  
+  // Text State
+  const [text, setText] = useState("");
+  const [textType, setTextType] = useState<"text" | "email">("text");
 
-  const analyzeMutation = useAnalyzeUrl();
+  // Image State
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageBase64, setImageBase64] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleAnalyze = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!url || !url.trim()) return;
+  // Mutations
+  const analyzeUrlMut = useAnalyzeUrl();
+  const analyzeTextMut = useAnalyzeText();
+  const analyzeImageMut = useAnalyzeImage();
 
-    // Basic URL format check
-    if (!/^https?:\/\//i.test(url.trim())) {
-      setErrorMsg("Please enter a valid URL starting with http:// or https://");
-      return;
-    }
+  const handleUrlSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!url) return;
+    setIsSimulating(true);
+    analyzeUrlMut.mutate({ data: { url } }, {
+      onSuccess: (data) => setPendingResult(data as UnifiedResult),
+      onError: () => setIsSimulating(false) // Handle gracefully in real app
+    });
+  };
 
-    setErrorMsg(null);
-    setIsAnalyzing(true);
-    setResult(null);
+  const handleTextSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!text) return;
+    setIsSimulating(true);
+    analyzeTextMut.mutate({ data: { text, inputType: textType } }, {
+      onSuccess: (data) => setPendingResult(data as UnifiedResult),
+      onError: () => setIsSimulating(false)
+    });
+  };
 
-    try {
-      // Start the mutation
-      const data = await analyzeMutation.mutateAsync({ data: { url: url.trim() } });
-      
-      // The StepLoader will call handleStepsComplete after ~4-5 seconds
-      // We store the data, but wait for the loader to finish before revealing
-      // using a sneaky hidden state, but for simplicity we'll just wait here
-      // if the API returns instantly, we still want the cool animation to finish.
-      // Handled by the onComplete callback of StepLoader.
-      
-      // Store result globally, but we only show it when isAnalyzing turns false
-      // Let's store it in a temporary variable that gets set to main state later
-      (window as any)._tempResult = data;
+  const handleImageSubmit = () => {
+    if (!imageBase64) return;
+    setIsSimulating(true);
+    analyzeImageMut.mutate({ data: { imageBase64 } }, {
+      onSuccess: (data) => setPendingResult(data as UnifiedResult),
+      onError: () => setIsSimulating(false)
+    });
+  };
 
-    } catch (err: any) {
-      console.error(err);
-      setErrorMsg(err.message || "Failed to analyze URL. The server might be unreachable.");
-      setIsAnalyzing(false);
+  const onSimulationComplete = () => {
+    setIsSimulating(false);
+    if (pendingResult) {
+      setResult(pendingResult);
+      setPendingResult(null);
     }
   };
 
-  const handleStepsComplete = () => {
-    setIsAnalyzing(false);
-    setResult((window as any)._tempResult);
-    (window as any)._tempResult = null;
-  };
-
-  const reset = () => {
+  const handleReset = () => {
     setResult(null);
+    setPendingResult(null);
     setUrl("");
-    setErrorMsg(null);
+    setText("");
+    setImagePreview(null);
+    setImageBase64(null);
+  };
+
+  const handleImageUpload = (file: File) => {
+    if (!file.type.startsWith("image/")) return;
+    
+    // Preview
+    const previewUrl = URL.createObjectURL(file);
+    setImagePreview(previewUrl);
+
+    // Base64 for API
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setImageBase64(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const getSteps = () => {
+    if (activeTab === "url") return URL_STEPS;
+    if (activeTab === "text") return TEXT_STEPS;
+    return IMAGE_STEPS;
   };
 
   return (
-    <div className="min-h-screen relative overflow-hidden flex flex-col">
-      {/* Background Image & Overlay */}
-      <div className="fixed inset-0 z-0">
-        <img 
-          src={`${import.meta.env.BASE_URL}images/cyber-bg.png`} 
-          alt="Cyber Background" 
-          className="w-full h-full object-cover opacity-30"
-        />
-        <div className="absolute inset-0 bg-gradient-to-b from-background/80 via-background/95 to-background" />
-      </div>
+    <div 
+      className="min-h-screen w-full relative overflow-x-hidden pt-10 pb-24 px-4 sm:px-6"
+      style={{
+        backgroundImage: `url('${import.meta.env.BASE_URL}images/cyber-bg.png')`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundAttachment: 'fixed',
+      }}
+    >
+      <div className="absolute inset-0 bg-background/80 backdrop-blur-[2px]" />
 
-      <header className="relative z-10 w-full py-6 px-6 md:px-12 flex items-center justify-between border-b border-white/5">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-primary/20 border border-primary/30 flex items-center justify-center text-primary shadow-[0_0_15px_rgba(59,130,246,0.3)]">
-            <ShieldAlert className="w-5 h-5" />
+      <div className="relative z-10 max-w-7xl mx-auto">
+        {/* Header */}
+        <header className="flex items-center justify-center mb-16 md:mb-24">
+          <div className="flex items-center gap-3 bg-card/40 backdrop-blur-md px-6 py-3 rounded-full border border-white/10 shadow-lg">
+            <ShieldCheck className="w-8 h-8 text-primary" />
+            <h1 className="text-2xl font-display font-bold tracking-wider">
+              Opp<span className="text-primary">Verifier</span>
+            </h1>
           </div>
-          <span className="font-display font-bold text-xl tracking-wide hidden sm:block">
-            Opp<span className="text-primary">Verifier</span>
-          </span>
-        </div>
-      </header>
+        </header>
 
-      <main className="flex-1 relative z-10 w-full max-w-5xl mx-auto px-4 py-12 md:py-24 flex flex-col items-center justify-center">
-        
+        {/* Main Content Area */}
         <AnimatePresence mode="wait">
-          
-          {/* STATE 1: INPUT */}
-          {!isAnalyzing && !result && (
-            <motion.div 
-              key="input"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, filter: "blur(10px)" }}
-              transition={{ duration: 0.4 }}
-              className="w-full max-w-3xl flex flex-col items-center text-center"
-            >
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 text-primary text-sm font-medium mb-8">
-                <Lock className="w-4 h-4" />
-                <span>Protect yourself from educational scams</span>
-              </div>
-              
-              <h1 className="text-4xl md:text-6xl font-display font-bold leading-tight mb-6">
-                Don't get scammed on your next <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-blue-400">opportunity.</span>
-              </h1>
-              
-              <p className="text-lg md:text-xl text-muted-foreground mb-12 max-w-2xl">
-                Paste the URL of any scholarship, internship, or online course below. Our AI-driven engine will analyze technical trust signals and content red flags instantly.
-              </p>
-
-              <form onSubmit={handleAnalyze} className="w-full relative group">
-                <div className="absolute -inset-1 bg-gradient-to-r from-primary/50 to-blue-600/50 rounded-2xl blur opacity-25 group-hover:opacity-40 transition duration-500"></div>
-                <div className="relative flex items-center w-full bg-card border border-white/10 rounded-2xl p-2 shadow-2xl focus-within:border-primary/50 transition-colors">
-                  <div className="pl-4 pr-2 text-muted-foreground">
-                    <Globe className="w-6 h-6" />
-                  </div>
-                  <input
-                    type="text"
-                    value={url}
-                    onChange={(e) => setUrl(e.target.value)}
-                    placeholder="https://example.com/apply-now..."
-                    className="flex-1 bg-transparent border-none outline-none py-4 text-lg font-mono text-foreground placeholder:text-muted-foreground/50 placeholder:font-sans focus:ring-0"
-                    disabled={isAnalyzing}
-                  />
-                  <button
-                    type="submit"
-                    disabled={!url || isAnalyzing}
-                    className="px-6 md:px-8 py-4 rounded-xl font-semibold bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-95 flex items-center gap-2"
-                  >
-                    <span>Analyze</span>
-                    <ArrowRight className="w-5 h-5" />
-                  </button>
-                </div>
-              </form>
-
-              {errorMsg && (
-                <motion.div 
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="mt-6 flex items-center gap-2 text-destructive bg-destructive/10 px-4 py-3 rounded-lg border border-destructive/20"
-                >
-                  <AlertTriangle className="w-5 h-5" />
-                  <span className="font-medium">{errorMsg}</span>
-                </motion.div>
-              )}
-
-              <div className="mt-16 flex flex-wrap justify-center gap-8 text-muted-foreground/60">
-                <div className="flex items-center gap-2">
-                  <ShieldAlert className="w-5 h-5" />
-                  <span className="text-sm font-medium">SSL Verified</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Database className="w-5 h-5" />
-                  <span className="text-sm font-medium">WHOIS Analysis</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <FileText className="w-5 h-5" />
-                  <span className="text-sm font-medium">Content Heuristics</span>
-                </div>
-              </div>
+          {result ? (
+            <motion.div key="results" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <VerdictCard result={result} onReset={handleReset} />
             </motion.div>
-          )}
-
-          {/* STATE 2: LOADING */}
-          {isAnalyzing && (
-            <motion.div 
-              key="loading"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 1.05 }}
-              transition={{ duration: 0.5 }}
-              className="w-full"
-            >
-              <StepLoader isActive={isAnalyzing} onComplete={handleStepsComplete} />
+          ) : isSimulating ? (
+            <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <StepLoader isActive={true} steps={getSteps()} onComplete={onSimulationComplete} />
             </motion.div>
-          )}
-
-          {/* STATE 3: RESULTS */}
-          {!isAnalyzing && result && (
-            <motion.div 
-              key="results"
-              initial={{ opacity: 0, y: 40 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, staggerChildren: 0.1 }}
-              className="w-full flex flex-col gap-8"
-            >
+          ) : (
+            <motion.div key="input" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
               
-              {/* Top Row: Score & Summary */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <div className="text-center mb-12">
+                <h2 className="text-4xl md:text-6xl font-display font-extrabold mb-6 tracking-tight text-glow">
+                  Don't get scammed on your <br className="hidden md:block"/>
+                  <span className="gradient-text">next opportunity.</span>
+                </h2>
+                <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto">
+                  Verify scholarships, internships, and courses instantly using our advanced multi-layered AI scam detection engine.
+                </p>
+              </div>
+
+              {/* Tabs Container */}
+              <div className="max-w-3xl mx-auto glass-panel rounded-3xl p-2 md:p-4 mb-20 shadow-2xl">
                 
-                {/* Score Card */}
-                <div className="glass-panel rounded-3xl p-8 flex flex-col items-center justify-center relative overflow-hidden lg:col-span-1">
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 blur-[50px] rounded-full -mr-10 -mt-10" />
-                  
-                  <h2 className="text-xl font-display font-semibold mb-6 text-foreground/80 w-full text-center">Safety Analysis</h2>
-                  
-                  <Gauge value={result.trustScore} />
-                  
-                  <div className="mt-8 flex flex-col items-center gap-2">
-                    <div className={cn(
-                      "px-6 py-2 rounded-2xl border font-display font-bold text-3xl flex items-center gap-3",
-                      getScoreColor(result.trustScore)
-                    )}>
-                      Grade: {result.grade}
-                    </div>
-                  </div>
+                {/* Tab Triggers */}
+                <div className="flex gap-2 mb-6 bg-black/20 p-2 rounded-2xl overflow-x-auto snap-x hide-scrollbar">
+                  {[
+                    { id: "url", icon: LinkIcon, label: "Verify URL" },
+                    { id: "text", icon: Mail, label: "Verify Email/Text" },
+                    { id: "image", icon: ImageIcon, label: "Verify Image" }
+                  ].map((t) => (
+                    <button
+                      key={t.id}
+                      onClick={() => setActiveTab(t.id as any)}
+                      className={cn(
+                        "flex-1 min-w-[140px] flex items-center justify-center gap-2 py-4 px-6 rounded-xl font-bold transition-all whitespace-nowrap",
+                        activeTab === t.id 
+                          ? "bg-primary text-primary-foreground shadow-[0_0_20px_rgba(59,130,246,0.3)]" 
+                          : "hover:bg-white/5 text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      <t.icon className="w-5 h-5" />
+                      {t.label}
+                    </button>
+                  ))}
                 </div>
 
-                {/* Summary & Scam Warning */}
-                <div className="lg:col-span-2 flex flex-col gap-6">
-                  
-                  <div className="glass-panel rounded-3xl p-8 flex-1 flex flex-col justify-center">
-                    <h3 className="text-lg text-muted-foreground font-medium mb-2">Verdict for</h3>
-                    <p className="font-mono text-primary break-all mb-6 text-sm">{result.url}</p>
-                    
-                    <p className="text-2xl md:text-3xl font-display font-semibold leading-relaxed">
-                      {result.summary}
-                    </p>
-                  </div>
-
-                  {result.trustScore < 70 && (
-                    <motion.div 
-                      initial={{ opacity: 0, x: 20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.4 }}
-                      className="bg-destructive/10 border border-destructive/30 rounded-3xl p-6 flex gap-4"
+                {/* Tab Content: URL */}
+                {activeTab === "url" && (
+                  <form onSubmit={handleUrlSubmit} className="p-4 md:p-8 space-y-6">
+                    <div>
+                      <label className="block text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wider ml-2">
+                        Paste Opportunity Link
+                      </label>
+                      <input
+                        type="url"
+                        placeholder="https://example.com/apply-now..."
+                        value={url}
+                        onChange={(e) => setUrl(e.target.value)}
+                        required
+                        className="w-full bg-black/40 border-2 border-white/10 rounded-2xl px-6 py-5 text-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={!url}
+                      className="w-full bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:hover:bg-primary text-primary-foreground text-xl font-bold py-5 rounded-2xl shadow-lg shadow-primary/25 transition-all hover:shadow-xl hover:-translate-y-1 active:translate-y-0"
                     >
-                      <div className="flex-shrink-0 w-12 h-12 bg-destructive/20 rounded-full flex items-center justify-center text-destructive">
-                        <AlertTriangle className="w-6 h-6" />
+                      Analyze URL
+                    </button>
+                  </form>
+                )}
+
+                {/* Tab Content: TEXT */}
+                {activeTab === "text" && (
+                  <form onSubmit={handleTextSubmit} className="p-4 md:p-8 space-y-6">
+                    <div>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3 ml-2 gap-3">
+                        <label className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                          Paste Content
+                        </label>
+                        <div className="flex bg-black/30 rounded-lg p-1">
+                          <button
+                            type="button"
+                            onClick={() => setTextType("text")}
+                            className={cn("px-4 py-1.5 rounded-md text-sm font-medium transition-colors", textType === "text" ? "bg-white/10 text-foreground" : "text-muted-foreground")}
+                          >
+                            Social Post
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setTextType("email")}
+                            className={cn("px-4 py-1.5 rounded-md text-sm font-medium transition-colors", textType === "email" ? "bg-white/10 text-foreground" : "text-muted-foreground")}
+                          >
+                            Email
+                          </button>
+                        </div>
                       </div>
-                      <div>
-                        <h4 className="text-destructive font-bold text-lg mb-1">Scam Warning</h4>
-                        <p className="text-destructive-foreground/90 text-sm md:text-base leading-relaxed">
-                          Real internships and jobs will <strong>never</strong> ask you to pay an upfront processing fee, security deposit, or buy your own equipment from a "preferred vendor". Legitimate scholarships do not require application fees.
+                      <textarea
+                        placeholder={`Paste the ${textType === "email" ? "email body including sender info" : "WhatsApp message, Telegram forward, or job post"} here...`}
+                        value={text}
+                        onChange={(e) => setText(e.target.value)}
+                        required
+                        rows={6}
+                        className="w-full bg-black/40 border-2 border-white/10 rounded-2xl px-6 py-5 text-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all resize-y min-h-[150px]"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={!text}
+                      className="w-full bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:hover:bg-primary text-primary-foreground text-xl font-bold py-5 rounded-2xl shadow-lg shadow-primary/25 transition-all hover:shadow-xl hover:-translate-y-1 active:translate-y-0"
+                    >
+                      Analyze Text
+                    </button>
+                  </form>
+                )}
+
+                {/* Tab Content: IMAGE */}
+                {activeTab === "image" && (
+                  <div className="p-4 md:p-8 space-y-6">
+                    <label className="block text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wider ml-2">
+                      Upload Screenshot (Instagram Ad, Poster, etc.)
+                    </label>
+                    
+                    {!imagePreview ? (
+                      <div
+                        onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                        onDragLeave={() => setIsDragging(false)}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          setIsDragging(false);
+                          if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                            handleImageUpload(e.dataTransfer.files[0]);
+                          }
+                        }}
+                        onClick={() => fileInputRef.current?.click()}
+                        className={cn(
+                          "w-full h-64 border-3 border-dashed rounded-3xl flex flex-col items-center justify-center cursor-pointer transition-all",
+                          isDragging ? "border-primary bg-primary/10" : "border-white/20 bg-black/20 hover:bg-black/40 hover:border-white/40"
+                        )}
+                      >
+                        <UploadCloud className={cn("w-16 h-16 mb-4", isDragging ? "text-primary" : "text-muted-foreground")} />
+                        <p className="text-lg font-semibold text-foreground mb-2">
+                          Drag & drop a screenshot here
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          or click to browse files (PNG, JPG)
                         </p>
                       </div>
-                    </motion.div>
-                  )}
-                </div>
+                    ) : (
+                      <div className="relative w-full h-64 rounded-3xl overflow-hidden border-2 border-white/20 bg-black/40 group">
+                        <img src={imagePreview} alt="Preview" className="w-full h-full object-contain p-2" />
+                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <button 
+                            onClick={() => { setImagePreview(null); setImageBase64(null); }}
+                            className="bg-destructive hover:bg-destructive/80 text-white px-6 py-3 rounded-xl font-bold"
+                          >
+                            Remove Image
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      className="hidden" 
+                      ref={fileInputRef}
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files[0]) {
+                          handleImageUpload(e.target.files[0]);
+                        }
+                      }}
+                    />
+
+                    <button
+                      onClick={handleImageSubmit}
+                      disabled={!imageBase64}
+                      className="w-full bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:hover:bg-primary text-primary-foreground text-xl font-bold py-5 rounded-2xl shadow-lg shadow-primary/25 transition-all hover:shadow-xl hover:-translate-y-1 active:translate-y-0"
+                    >
+                      Extract & Analyze Text
+                    </button>
+                  </div>
+                )}
               </div>
 
-              {/* Bottom Row: Signals & Flags */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-4">
+              {/* Scam Encyclopedia */}
+              <div className="mt-32">
+                <div className="text-center mb-12">
+                  <h3 className="text-3xl font-display font-bold mb-4">Scam Encyclopedia</h3>
+                  <p className="text-muted-foreground">Learn the red flags of common educational scams.</p>
+                </div>
                 
-                {/* Trust Signals */}
-                <div className="glass-panel rounded-3xl p-8">
-                  <h3 className="text-xl font-display font-bold mb-6 flex items-center gap-2">
-                    <ShieldCheck className="w-6 h-6 text-primary" />
-                    Technical Trust Signals
-                  </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  <div className="glass-card p-6 rounded-2xl hover:-translate-y-1">
+                    <div className="w-12 h-12 rounded-full bg-destructive/20 text-destructive flex items-center justify-center mb-6">
+                      <AlertCircle className="w-6 h-6" />
+                    </div>
+                    <h4 className="text-lg font-bold mb-3">The Upfront Fee Scam</h4>
+                    <p className="text-muted-foreground text-sm leading-relaxed">
+                      Real internships pay you. If a company asks for a "training fee", "laptop deposit", or "registration fee", it is 100% a scam.
+                    </p>
+                  </div>
                   
-                  <div className="space-y-4">
-                    <SignalRow 
-                      label="SSL Certificate" 
-                      value={result.sslValid ? "Valid & Secure" : "Missing or Invalid"} 
-                      good={result.sslValid} 
-                    />
-                    <SignalRow 
-                      label="Domain Extension" 
-                      value={result.domainExtension.toUpperCase()} 
-                      good={['.EDU', '.GOV', '.ORG', '.COM'].includes(result.domainExtension.toUpperCase())} 
-                    />
-                    <SignalRow 
-                      label="Domain Age" 
-                      value={result.domainAgeDays ? `${result.domainAgeDays} days` : "Unknown"} 
-                      good={result.domainAgeDays ? result.domainAgeDays > 180 : false} 
-                      warning={result.domainAgeDays ? result.domainAgeDays <= 180 && result.domainAgeDays > 30 : true}
-                    />
-                    <SignalRow 
-                      label="Data Collection" 
-                      value={`${result.inputFieldCount} input fields found`} 
-                      good={result.inputFieldCount < 5} 
-                      warning={result.inputFieldCount >= 5 && result.inputFieldCount < 10}
-                    />
+                  <div className="glass-card p-6 rounded-2xl hover:-translate-y-1">
+                    <div className="w-12 h-12 rounded-full bg-warning/20 text-warning flex items-center justify-center mb-6">
+                      <Mail className="w-6 h-6" />
+                    </div>
+                    <h4 className="text-lg font-bold mb-3">Free Email Sender</h4>
+                    <p className="text-muted-foreground text-sm leading-relaxed">
+                      Legitimate multinational companies do not send official offer letters from @gmail.com or @yahoo.com addresses.
+                    </p>
+                  </div>
+                  
+                  <div className="glass-card p-6 rounded-2xl hover:-translate-y-1">
+                    <div className="w-12 h-12 rounded-full bg-primary/20 text-primary flex items-center justify-center mb-6">
+                      <Globe className="w-6 h-6" />
+                    </div>
+                    <h4 className="text-lg font-bold mb-3">New Domain Warning</h4>
+                    <p className="text-muted-foreground text-sm leading-relaxed">
+                      Scammers constantly spin up new websites. If an "established" company has a website registered 12 days ago, be extremely cautious.
+                    </p>
+                  </div>
+                  
+                  <div className="glass-card p-6 rounded-2xl hover:-translate-y-1">
+                    <div className="w-12 h-12 rounded-full bg-purple-500/20 text-purple-400 flex items-center justify-center mb-6">
+                      <ShieldCheck className="w-6 h-6" />
+                    </div>
+                    <h4 className="text-lg font-bold mb-3">Guaranteed Selection</h4>
+                    <p className="text-muted-foreground text-sm leading-relaxed">
+                      If an opportunity promises "100% placement" or hires you without any interview process, they are likely harvesting your data.
+                    </p>
                   </div>
                 </div>
-
-                {/* Red Flags */}
-                <div className="glass-panel rounded-3xl p-8">
-                  <h3 className="text-xl font-display font-bold mb-6 flex items-center gap-2">
-                    <AlertTriangle className="w-6 h-6 text-warning" />
-                    Detailed Findings
-                  </h3>
-                  
-                  {result.flags.length === 0 ? (
-                    <div className="h-full min-h-[200px] flex flex-col items-center justify-center text-muted-foreground border border-dashed border-white/10 rounded-2xl bg-black/20">
-                      <CheckCircle className="w-10 h-10 text-success/50 mb-3" />
-                      <p>No significant red flags detected.</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {result.flags.map((flag, idx) => (
-                        <div 
-                          key={idx} 
-                          className={cn(
-                            "p-4 rounded-xl border flex gap-4 items-start",
-                            flag.severity === 'high' ? "bg-destructive/5 border-destructive/20 text-destructive-foreground" :
-                            flag.severity === 'medium' ? "bg-warning/5 border-warning/20 text-warning-foreground" :
-                            "bg-white/5 border-white/10 text-foreground"
-                          )}
-                        >
-                          <div className="mt-0.5">
-                            {flag.severity === 'high' ? <XCircle className="w-5 h-5 text-destructive" /> :
-                             flag.severity === 'medium' ? <AlertTriangle className="w-5 h-5 text-warning" /> :
-                             <Info className="w-5 h-5 text-primary" />}
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="text-xs font-bold uppercase tracking-wider opacity-70">{flag.category}</span>
-                              <span className={cn(
-                                "text-[10px] px-2 py-0.5 rounded-full font-semibold",
-                                flag.severity === 'high' ? "bg-destructive/20 text-destructive" :
-                                flag.severity === 'medium' ? "bg-warning/20 text-warning" :
-                                "bg-primary/20 text-primary"
-                              )}>
-                                {flag.severity} risk
-                              </span>
-                            </div>
-                            <p className="text-sm opacity-90">{flag.message}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
               </div>
-
-              <div className="flex justify-center mt-8">
-                <button
-                  onClick={reset}
-                  className="px-8 py-4 rounded-xl font-semibold bg-white/5 hover:bg-white/10 border border-white/10 text-foreground transition-all active:scale-95 flex items-center gap-2"
-                >
-                  <Search className="w-5 h-5" />
-                  Analyze Another URL
-                </button>
-              </div>
-
             </motion.div>
           )}
         </AnimatePresence>
-      </main>
-    </div>
-  );
-}
-
-function SignalRow({ label, value, good, warning }: { label: string, value: string, good: boolean, warning?: boolean }) {
-  return (
-    <div className="flex items-center justify-between p-4 rounded-xl bg-black/20 border border-white/5">
-      <span className="text-muted-foreground font-medium">{label}</span>
-      <div className="flex items-center gap-2">
-        <span className="font-semibold text-foreground">{value}</span>
-        {good ? (
-          <CheckCircle className="w-5 h-5 text-success" />
-        ) : warning ? (
-          <AlertTriangle className="w-5 h-5 text-warning" />
-        ) : (
-          <XCircle className="w-5 h-5 text-destructive" />
-        )}
       </div>
     </div>
   );

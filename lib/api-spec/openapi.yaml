@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Api
-  version: 0.1.0
+  version: 0.2.0
   description: Student Opportunity Verifier API
 servers:
   - url: /api
@@ -10,14 +10,13 @@ tags:
   - name: health
     description: Health operations
   - name: analyze
-    description: URL analysis operations
+    description: URL / Text / Image analysis
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -25,12 +24,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
   /analyze:
     post:
       operationId: analyzeUrl
       tags: [analyze]
       summary: Analyze a URL for scam indicators
-      description: Analyzes a given URL for SSL, WHOIS, keywords, data harvesting, and domain reputation
       requestBody:
         required: true
         content:
@@ -50,12 +49,57 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Server error
+
+  /analyze/text:
+    post:
+      operationId: analyzeText
+      tags: [analyze]
+      summary: Analyze pasted email or social media text
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnalyzeTextRequest"
+      responses:
+        "200":
+          description: Text analysis result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TextAnalysisResult"
+        "400":
+          description: Bad request
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+
+  /analyze/image:
+    post:
+      operationId: analyzeImage
+      tags: [analyze]
+      summary: Analyze an image (OCR + scam scan)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnalyzeImageRequest"
+      responses:
+        "200":
+          description: Image OCR analysis result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TextAnalysisResult"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -63,32 +107,46 @@ components:
       properties:
         status:
           type: string
-      required:
-        - status
+      required: [status]
+
     AnalyzeRequest:
       type: object
       properties:
         url:
           type: string
-          description: The URL to analyze
-      required:
-        - url
+      required: [url]
+
+    AnalyzeTextRequest:
+      type: object
+      properties:
+        text:
+          type: string
+        inputType:
+          type: string
+          enum: [email, text, image]
+          default: text
+      required: [text]
+
+    AnalyzeImageRequest:
+      type: object
+      properties:
+        imageBase64:
+          type: string
+          description: Base64-encoded image (data URI or raw base64)
+      required: [imageBase64]
+
     ScamFlag:
       type: object
       properties:
         category:
           type: string
-          description: Category of the flag (e.g. 'SSL', 'Domain Age', 'Keywords', 'Data Harvesting', 'Domain Reputation')
         severity:
           type: string
           enum: [low, medium, high]
         message:
           type: string
-          description: Human-readable description of the flag
-      required:
-        - category
-        - severity
-        - message
+      required: [category, severity, message]
+
     AnalyzeResult:
       type: object
       properties:
@@ -96,10 +154,8 @@ components:
           type: string
         trustScore:
           type: number
-          description: Trust score from 0 to 100
         grade:
           type: string
-          description: Safety grade (A+, A, B, C, D, F)
         flags:
           type: array
           items:
@@ -119,7 +175,6 @@ components:
             type: string
         summary:
           type: string
-          description: One-sentence summary verdict
       required:
         - url
         - trustScore
@@ -130,6 +185,37 @@ components:
         - inputFieldCount
         - scamKeywordsFound
         - summary
+
+    TextAnalysisResult:
+      type: object
+      properties:
+        trustScore:
+          type: number
+        grade:
+          type: string
+        flags:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScamFlag"
+        scamKeywordsFound:
+          type: array
+          items:
+            type: string
+        summary:
+          type: string
+        inputType:
+          type: string
+        extractedText:
+          type: string
+          nullable: true
+      required:
+        - trustScore
+        - grade
+        - flags
+        - scamKeywordsFound
+        - summary
+        - inputType
+
     ErrorResponse:
       type: object
       properties:
@@ -137,5 +223,4 @@ components:
           type: string
         detail:
           type: string
-      required:
-        - error
+      required: [error]

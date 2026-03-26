@@ -1,28 +1,30 @@
 import { Link } from "wouter";
-import { ShieldAlert } from "lucide-react";
+import { ShieldCheck, ArrowLeft } from "lucide-react";
 
 export default function NotFound() {
   return (
-    <div className="min-h-screen w-full flex flex-col items-center justify-center bg-background text-foreground relative overflow-hidden">
-      {/* Background Image & Overlay */}
-      <div className="absolute inset-0 z-0">
-        <img 
-          src={`${import.meta.env.BASE_URL}images/cyber-bg.png`} 
-          alt="Cyber Background" 
-          className="w-full h-full object-cover opacity-20 grayscale"
-        />
-        <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
-      </div>
-
-      <div className="relative z-10 text-center flex flex-col items-center">
-        <ShieldAlert className="w-24 h-24 text-destructive mb-6 opacity-80" />
-        <h1 className="text-6xl font-display font-bold mb-4 tracking-tight">404</h1>
-        <p className="text-xl text-muted-foreground mb-8 max-w-md">
-          The page you are looking for has been moved, deleted, or possibly intercepted.
+    <div className="min-h-screen w-full flex items-center justify-center bg-background p-4">
+      <div className="max-w-md w-full glass-panel rounded-3xl p-12 text-center space-y-6 border border-white/10">
+        <div className="flex justify-center mb-4">
+          <ShieldCheck className="w-20 h-20 text-muted-foreground opacity-50" />
+        </div>
+        
+        <h1 className="text-5xl font-display font-extrabold tracking-tight">404</h1>
+        
+        <h2 className="text-xl font-semibold text-foreground/80">
+          Page Not Found
+        </h2>
+        
+        <p className="text-muted-foreground">
+          The page you are looking for doesn't exist or has been moved.
         </p>
-        <Link href="/" className="px-6 py-3 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition-colors">
-          Return to Safety
-        </Link>
+
+        <div className="pt-6">
+          <Link href="/" className="inline-flex items-center gap-2 px-8 py-4 bg-primary text-primary-foreground font-bold rounded-xl hover:bg-primary/90 transition-all hover:scale-105 active:scale-95 shadow-lg shadow-primary/20">
+            <ArrowLeft className="w-5 h-5" />
+            Back to Scanner
+          </Link>
+        </div>
       </div>
     </div>
   );
