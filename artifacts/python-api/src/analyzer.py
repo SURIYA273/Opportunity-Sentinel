@@ -381,6 +381,107 @@ def calculate_score_and_grade(
     return score, grade, flags, summary
 
 
+# ─── Next Steps Generator (URL) ───────────────────────────────────────────────
+
+def generate_url_next_steps(score: int, flags: list, domain: str, domain_age_days, ssl_info: dict) -> list:
+    """Generate prioritized, actionable next-step recommendations for URL analysis."""
+    steps = []
+    high_cats = {f["category"] for f in flags if f["severity"] == "high"}
+    med_cats = {f["category"] for f in flags if f["severity"] == "medium"}
+    all_risk_cats = high_cats | med_cats
+
+    if score < 35:
+        steps.append({
+            "priority": "critical",
+            "action": "Stop — do NOT visit or interact with this site",
+            "detail": f"'{domain}' shows multiple serious red flags. Do not click any links, fill in forms, or share any information."
+        })
+        steps.append({
+            "priority": "critical",
+            "action": "Report the scam website",
+            "detail": "Report to cybercrime.gov.in or call 1930 (India Cybercrime Helpline). You can also report to Google Safe Browsing at safebrowsing.google.com/safebrowsing/report_phish/."
+        })
+    elif score < 50:
+        steps.append({
+            "priority": "high",
+            "action": "Avoid sharing personal or financial information",
+            "detail": f"'{domain}' has high-risk indicators. Never submit your Aadhaar, bank details, or pay any fees through this site."
+        })
+        steps.append({
+            "priority": "high",
+            "action": "Find the official website independently",
+            "detail": "Search for the organization's name on Google. Verify the official domain from trusted directories, not links you received."
+        })
+    elif score < 65:
+        steps.append({
+            "priority": "medium",
+            "action": "Cross-check through official sources",
+            "detail": f"Verify '{domain}' by searching the organization on LinkedIn, Naukri, or Internshala before engaging."
+        })
+
+    # SSL issues
+    if "SSL Certificate" in high_cats:
+        steps.append({
+            "priority": "critical",
+            "action": "Never enter any data on this site",
+            "detail": "This site has an invalid or missing SSL certificate. Any data you enter (passwords, card numbers) is transmitted without encryption and can be stolen."
+        })
+    elif ssl_info.get("free_provider"):
+        steps.append({
+            "priority": "medium",
+            "action": "Be cautious about the SSL certificate",
+            "detail": "The SSL certificate is from a free provider. While not conclusive, scam sites frequently use free SSL to appear legitimate quickly."
+        })
+
+    # Very new domain
+    if domain_age_days is not None and domain_age_days < 180:
+        steps.append({
+            "priority": "critical",
+            "action": "Treat this brand-new domain with extreme suspicion",
+            "detail": f"'{domain}' was registered only {domain_age_days} day(s) ago. Fraudulent sites are created just before a campaign and abandoned afterward."
+        })
+    elif domain_age_days is None:
+        steps.append({
+            "priority": "high",
+            "action": "Verify the domain independently",
+            "detail": f"WHOIS data for '{domain}' is hidden or missing. Scam operators often hide domain registration details."
+        })
+
+    # Scam keywords
+    if "Scam Keywords" in high_cats:
+        steps.append({
+            "priority": "critical",
+            "action": "Refuse any payment or fee request",
+            "detail": "Scam keywords were found in this page's content. No legitimate opportunity requires upfront deposits, processing fees, or security charges."
+        })
+
+    # Data harvesting
+    if "Data Harvesting" in high_cats:
+        steps.append({
+            "priority": "high",
+            "action": "Do not fill in any forms on this site",
+            "detail": "An unusually high number of input fields were detected without a clear login or registration purpose — a sign of aggressive data harvesting."
+        })
+
+    # Risky domain extension
+    if "Domain Reputation" in high_cats:
+        steps.append({
+            "priority": "high",
+            "action": "Be extra wary of the domain extension",
+            "detail": "This domain uses an extension commonly associated with scam and spam sites. Legitimate organizations typically use .com, .org, .edu, or country-specific extensions."
+        })
+
+    # Safe overall
+    if score >= 75:
+        steps.append({
+            "priority": "low",
+            "action": "Still verify through official channels",
+            "detail": f"'{domain}' appears relatively safe, but always confirm the opportunity through the organization's officially published contact details."
+        })
+
+    return steps
+
+
 # ─── Main Entry Point ─────────────────────────────────────────────────────────
 
 def analyze_url(url: str) -> dict:
@@ -416,6 +517,8 @@ def analyze_url(url: str) -> dict:
         trusted_domain_match=trusted_domain_match,
     )
 
+    next_steps = generate_url_next_steps(trust_score, flags, domain, domain_age_days, ssl_info)
+
     return {
         "url": url,
         "trustScore": trust_score,
@@ -427,4 +530,5 @@ def analyze_url(url: str) -> dict:
         "inputFieldCount": float(total_input_count),
         "scamKeywordsFound": penalised_keywords,
         "summary": summary,
+        "nextSteps": next_steps,
     }

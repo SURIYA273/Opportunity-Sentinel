@@ -11,6 +11,8 @@ import re
 from PIL import Image, ImageFilter, ImageEnhance
 import pytesseract
 from text_analyzer import analyze_text
+from analyzer import get_domain_age
+from urllib.parse import urlparse
 
 
 # ─── Image Preprocessing ──────────────────────────────────────────────────────
@@ -342,13 +344,80 @@ def analyze_image(image_base64: str) -> dict:
                 "message": f"Phone number(s) extracted: {', '.join(phones[:3])}. Verify on Truecaller or official company directories before calling.",
             })
 
-        # URLs — prompt to use URL checker
+        # URLs — domain age check + prompt to use URL checker
         if urls:
             result["flags"].append({
                 "category": "Links Detected",
                 "severity": "medium",
                 "message": f"URL(s) found in image: {', '.join(urls[:2])}. Use the URL Checker tab to verify before visiting.",
             })
+            # Check domain age for the first extracted URL
+            try:
+                first_url = urls[0]
+                if not first_url.startswith("http"):
+                    first_url = "https://" + first_url
+                parsed = urlparse(first_url)
+                link_domain = (parsed.hostname or "").lstrip("www.")
+                if link_domain:
+                    age_days, _ = get_domain_age(link_domain)
+                    if age_days is None:
+                        score = max(0, score - 15)
+                        result["flags"].append({
+                            "category": "Link Domain Age",
+                            "severity": "high",
+                            "message": f"Cannot verify registration age of '{link_domain}'. Hidden WHOIS data is common among scam domains. −15 points.",
+                        })
+                    elif age_days < 180:
+                        score = max(0, score - 20)
+                        result["flags"].append({
+                            "category": "Link Domain Age",
+                            "severity": "high",
+                            "message": f"Link domain '{link_domain}' is only {age_days} day(s) old — under 6 months. Newly created domains are a major red flag. −20 points.",
+                        })
+                    elif age_days < 365:
+                        score = max(0, score - 5)
+                        result["flags"].append({
+                            "category": "Link Domain Age",
+                            "severity": "medium",
+                            "message": f"Link domain '{link_domain}' is {age_days} days old (under 1 year). Proceed with caution. −5 points.",
+                        })
+                    else:
+                        result["flags"].append({
+                            "category": "Link Domain Age",
+                            "severity": "low",
+                            "message": f"Link domain '{link_domain}' has been registered for {age_days} days ({age_days // 365} year(s)). Established age is a positive signal.",
+                        })
+            except Exception:
+                pass
+
+        # Domain age for extracted email domains
+        elif emails and not urls:
+            try:
+                first_email_domain = emails[0].split("@")[-1].lower()
+                if first_email_domain not in FREE_EMAIL_DOMAINS:
+                    age_days, _ = get_domain_age(first_email_domain)
+                    if age_days is None:
+                        score = max(0, score - 10)
+                        result["flags"].append({
+                            "category": "Email Domain Age",
+                            "severity": "high",
+                            "message": f"Cannot verify age of email domain '{first_email_domain}'. Scam operators often hide WHOIS data. −10 points.",
+                        })
+                    elif age_days < 180:
+                        score = max(0, score - 15)
+                        result["flags"].append({
+                            "category": "Email Domain Age",
+                            "severity": "high",
+                            "message": f"Email domain '{first_email_domain}' is only {age_days} day(s) old. Very new domains are a strong scam indicator. −15 points.",
+                        })
+                    else:
+                        result["flags"].append({
+                            "category": "Email Domain Age",
+                            "severity": "low",
+                            "message": f"Email domain '{first_email_domain}' has been active for {age_days} days ({age_days // 365} year(s)). Established age is a positive signal.",
+                        })
+            except Exception:
+                pass
 
         # Clamp and re-grade
         score = max(0, min(100, score))
