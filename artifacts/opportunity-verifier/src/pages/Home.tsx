@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useAnalyzeUrl } from "@workspace/api-client-react";
 import { type AnalyzeResult } from "@workspace/api-client-react/src/generated/api.schemas";
 import { 
-  ShieldAlert, 
+  ShieldAlert,
+  ShieldCheck,
   Search, 
   Lock, 
   Globe, 
