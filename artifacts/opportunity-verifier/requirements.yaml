@@ -1,0 +1,14 @@
+packages:
+  "framer-motion": "For smooth step-by-step loading animations and results reveal"
+  "clsx": "For conditional class names"
+  "tailwind-merge": "For merging tailwind classes safely"
+  "lucide-react": "For UI icons"
+
+images:
+  - path: "artifacts/opportunity-verifier/public/images/cyber-bg.png"
+    description: "Abstract dark navy and deep security blue cyber grid mesh background with very subtle glowing nodes, professional cybersecurity aesthetic, high tech, dark mode"
+    aspect_ratio: "16:9"
+
+notes:
+  - Expects /api/analyze to return AnalyzeResult schema
+  - Simulates a minimum loading time to show the verification steps animation

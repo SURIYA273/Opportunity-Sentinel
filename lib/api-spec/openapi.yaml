@@ -1,15 +1,16 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Student Opportunity Verifier API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: analyze
+    description: URL analysis operations
 paths:
   /healthz:
     get:
@@ -24,6 +25,37 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /analyze:
+    post:
+      operationId: analyzeUrl
+      tags: [analyze]
+      summary: Analyze a URL for scam indicators
+      description: Analyzes a given URL for SSL, WHOIS, keywords, data harvesting, and domain reputation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnalyzeRequest"
+      responses:
+        "200":
+          description: Analysis result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyzeResult"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +65,77 @@ components:
           type: string
       required:
         - status
-
+    AnalyzeRequest:
+      type: object
+      properties:
+        url:
+          type: string
+          description: The URL to analyze
+      required:
+        - url
+    ScamFlag:
+      type: object
+      properties:
+        category:
+          type: string
+          description: Category of the flag (e.g. 'SSL', 'Domain Age', 'Keywords', 'Data Harvesting', 'Domain Reputation')
+        severity:
+          type: string
+          enum: [low, medium, high]
+        message:
+          type: string
+          description: Human-readable description of the flag
+      required:
+        - category
+        - severity
+        - message
+    AnalyzeResult:
+      type: object
+      properties:
+        url:
+          type: string
+        trustScore:
+          type: number
+          description: Trust score from 0 to 100
+        grade:
+          type: string
+          description: Safety grade (A+, A, B, C, D, F)
+        flags:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScamFlag"
+        sslValid:
+          type: boolean
+        domainAgeDays:
+          type: number
+          nullable: true
+        domainExtension:
+          type: string
+        inputFieldCount:
+          type: number
+        scamKeywordsFound:
+          type: array
+          items:
+            type: string
+        summary:
+          type: string
+          description: One-sentence summary verdict
+      required:
+        - url
+        - trustScore
+        - grade
+        - flags
+        - sslValid
+        - domainExtension
+        - inputFieldCount
+        - scamKeywordsFound
+        - summary
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        detail:
+          type: string
+      required:
+        - error

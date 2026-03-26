@@ -1,5 +1,5 @@
 kind = "api"
-previewPath = "/api" # TODO - should be excluded from preview in the first place
+previewPath = "/api"
 title = "API Server"
 version = "1.0.0"
 id = "3B4_FFSkEVBkAeYMFRJ2e"
@@ -12,6 +12,9 @@ paths = ["/api"]
 [services.development]
 run = "pnpm --filter @workspace/api-server run dev"
 
+[services.development.env]
+PYTHON_API_PORT = "8001"
+
 [services.production]
 
 [services.production.build]
@@ -21,12 +24,31 @@ args = ["pnpm", "--filter", "@workspace/api-server", "run", "build"]
 NODE_ENV = "production"
 
 [services.production.run]
-# we don't run through pnpm to make startup faster in production
 args = ["node", "--enable-source-maps", "artifacts/api-server/dist/index.mjs"]
 
 [services.production.run.env]
 PORT = "8080"
 NODE_ENV = "production"
+PYTHON_API_PORT = "8001"
 
 [services.production.health.startup]
 path = "/api/healthz"
+
+[[services]]
+localPort = 8001
+name = "Python Analyzer"
+paths = []
+
+[services.development]
+run = "bash /home/runner/workspace/artifacts/python-api/run.sh"
+
+[services.development.env]
+PYTHON_API_PORT = "8001"
+
+[services.production]
+
+[services.production.run]
+args = ["python3", "/home/runner/workspace/artifacts/python-api/src/main.py"]
+
+[services.production.run.env]
+PYTHON_API_PORT = "8001"
