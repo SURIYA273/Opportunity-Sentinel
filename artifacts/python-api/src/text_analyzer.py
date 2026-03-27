@@ -227,10 +227,10 @@ def analyze_text(text: str, input_type: str = "text") -> dict:
             "message": "No obvious scam keywords found in the text.",
         })
 
-    # Email sender domain check
+    # Email sender domain check (skip for image — entity scoring is done in image_analyzer)
     sender_domain = None
     is_free_sender = False
-    if input_type in ("email", "image") or "@" in text:
+    if input_type != "image" and (input_type == "email" or "@" in text):
         sender_domain, is_free_sender = extract_sender_domain(text)
         if sender_domain:
             if is_free_sender:

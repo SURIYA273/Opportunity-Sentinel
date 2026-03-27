@@ -1,87 +1,20 @@
 """
-Image OCR analysis module - Enhanced with:
-- Multi-mode Tesseract OCR + image preprocessing for maximum text extraction
-- Rich entity extraction (phones, URLs, emails, money amounts)
-- Deeper scam scoring based on visual evidence
-- Actionable next-steps recommendations based on score and findings
+Image OCR analysis module — optimized for speed and accuracy.
+Uses 2 preprocessing variants × 2 Tesseract PSM modes (4 passes total)
+with image resizing for fast, reliable text extraction.
 """
 import base64
 import io
 import re
-from PIL import Image, ImageFilter, ImageEnhance
+from PIL import Image, ImageEnhance, ImageFilter
 import pytesseract
 from text_analyzer import analyze_text
-from analyzer import get_domain_age
-from urllib.parse import urlparse
 
 
-# ─── Image Preprocessing ──────────────────────────────────────────────────────
+# ─── Constants ────────────────────────────────────────────────────────────────
 
-def preprocess_image(image: Image.Image) -> list:
-    """Generate multiple preprocessed variants to maximize OCR accuracy."""
-    variants = []
-
-    # 1. Original converted to RGB
-    rgb = image.convert("RGB")
-    variants.append(rgb)
-
-    # 2. Grayscale + enhanced contrast
-    gray = image.convert("L")
-    enhanced = ImageEnhance.Contrast(gray).enhance(2.5)
-    variants.append(enhanced)
-
-    # 3. Grayscale + sharpened
-    sharpened = gray.filter(ImageFilter.SHARPEN)
-    variants.append(sharpened)
-
-    # 4. High contrast + sharpen combined
-    sharp_enhanced = ImageEnhance.Contrast(sharpened).enhance(2.0)
-    variants.append(sharp_enhanced)
-
-    # 5. Scaled up 2x (helps with small text)
-    try:
-        w, h = image.size
-        big = gray.resize((w * 2, h * 2), Image.LANCZOS)
-        variants.append(ImageEnhance.Contrast(big).enhance(2.0))
-    except Exception:
-        pass
-
-    return variants
-
-
-def run_ocr_multi_mode(image: Image.Image) -> str:
-    """Run Tesseract with multiple PSM modes and return the longest result."""
-    psm_modes = [
-        "--psm 3",   # Fully automatic page segmentation (best general purpose)
-        "--psm 6",   # Single uniform block of text
-        "--psm 11",  # Sparse text — finds as much text as possible
-        "--psm 4",   # Single column of text of variable sizes
-        "--psm 12",  # Sparse text with OSD
-    ]
-    best_text = ""
-    for psm in psm_modes:
-        try:
-            text = pytesseract.image_to_string(image, config=psm + " --oem 3")
-            text = text.strip()
-            if len(text) > len(best_text):
-                best_text = text
-        except Exception:
-            continue
-    return best_text
-
-
-def extract_text_best(image: Image.Image) -> str:
-    """Try all preprocessing variants + all PSM modes and return the best text."""
-    variants = preprocess_image(image)
-    best_text = ""
-    for variant in variants:
-        text = run_ocr_multi_mode(variant)
-        if len(text) > len(best_text):
-            best_text = text
-    return best_text.strip()
-
-
-# ─── Entity Extraction ────────────────────────────────────────────────────────
+MAX_OCR_WIDTH = 1400   # resize images wider than this before OCR
+MAX_OCR_HEIGHT = 1400
 
 FREE_EMAIL_DOMAINS = [
     "gmail.com", "yahoo.com", "hotmail.com", "outlook.com",
@@ -89,6 +22,49 @@ FREE_EMAIL_DOMAINS = [
     "protonmail.com", "icloud.com", "live.com", "zoho.com",
 ]
 
+
+# ─── Image Preprocessing (fast — 2 variants only) ─────────────────────────────
+
+def resize_for_ocr(image: Image.Image) -> Image.Image:
+    """Resize image if too large — keeps OCR fast without losing quality."""
+    w, h = image.size
+    if w > MAX_OCR_WIDTH or h > MAX_OCR_HEIGHT:
+        ratio = min(MAX_OCR_WIDTH / w, MAX_OCR_HEIGHT / h)
+        new_size = (int(w * ratio), int(h * ratio))
+        image = image.resize(new_size, Image.LANCZOS)
+    return image
+
+
+def preprocess_fast(image: Image.Image) -> list:
+    """Return 2 quick preprocessing variants."""
+    image = resize_for_ocr(image)
+    gray = image.convert("L")
+    # Variant 1: grayscale with boosted contrast
+    enhanced = ImageEnhance.Contrast(gray).enhance(2.0)
+    # Variant 2: grayscale + sharpen
+    sharpened = gray.filter(ImageFilter.SHARPEN)
+    return [enhanced, sharpened]
+
+
+# ─── OCR (2 PSM modes — fast and general-purpose) ────────────────────────────
+
+def extract_text_fast(image: Image.Image) -> str:
+    """Run OCR on 2 preprocessed variants × 2 PSM modes. Return the best result."""
+    psm_modes = ["--psm 3 --oem 3", "--psm 6 --oem 3"]
+    variants = preprocess_fast(image)
+    best = ""
+    for variant in variants:
+        for psm in psm_modes:
+            try:
+                text = pytesseract.image_to_string(variant, config=psm).strip()
+                if len(text) > len(best):
+                    best = text
+            except Exception:
+                continue
+    return best
+
+
+# ─── Entity Extraction ────────────────────────────────────────────────────────
 
 def extract_phone_numbers(text: str) -> list:
     patterns = [
@@ -101,18 +77,18 @@ def extract_phone_numbers(text: str) -> list:
     found = []
     for p in patterns:
         found.extend(m.strip() for m in re.findall(p, text))
-    return list(set(found))
+    return list(set(found))[:5]
 
 
 def extract_urls(text: str) -> list:
     pattern = r'(?:https?://|www\.)\S+'
     found = re.findall(pattern, text, re.IGNORECASE)
-    return [u.rstrip(".,;)\"'") for u in found]
+    return [u.rstrip(".,;)\"'") for u in found][:3]
 
 
 def extract_emails(text: str) -> list:
     pattern = r'[\w.+-]+@[\w.-]+\.\w{2,}'
-    return list(set(re.findall(pattern, text, re.IGNORECASE)))
+    return list(set(re.findall(pattern, text, re.IGNORECASE)))[:5]
 
 
 def extract_money_amounts(text: str) -> list:
@@ -125,124 +101,101 @@ def extract_money_amounts(text: str) -> list:
     found = []
     for p in patterns:
         found.extend(m.strip() for m in re.findall(p, text, re.IGNORECASE))
-    return list(set(found))
-
-
-def extract_organization_names(text: str) -> list:
-    """Try to extract organization/company names mentioned in the image."""
-    patterns = [
-        r'(?:company|organization|org|firm|pvt\.?\s*ltd\.?|limited|inc\.?|llp)\b[^:\n]{0,40}',
-        r'(?:from|by|at)\s+([A-Z][A-Za-z\s&.]{3,40}(?:Pvt|Ltd|Inc|Corp|Technologies|Solutions|Services|Institute|Academy|University|College)\b)',
-    ]
-    found = []
-    for p in patterns:
-        found.extend(re.findall(p, text, re.IGNORECASE)[:2])
-    return list(set(f.strip() for f in found if len(f.strip()) > 4))
+    return list(set(found))[:4]
 
 
 # ─── Next Steps Generator ─────────────────────────────────────────────────────
 
 def generate_next_steps(score: int, flags: list, entities: dict) -> list:
-    """Generate prioritized, actionable recommendations based on analysis."""
     steps = []
     high_cats = {f["category"] for f in flags if f["severity"] == "high"}
     med_cats = {f["category"] for f in flags if f["severity"] == "medium"}
     all_risk_cats = high_cats | med_cats
 
-    # Critical: score very low
     if score < 35:
         steps.append({
             "priority": "critical",
             "action": "Stop — do NOT engage with this opportunity",
-            "detail": "This image contains multiple strong scam indicators. Ignore, block, and delete this message."
+            "detail": "Multiple strong scam indicators found. Delete, block, and ignore this immediately."
         })
         steps.append({
             "priority": "critical",
             "action": "Report the scam immediately",
-            "detail": "File a complaint at cybercrime.gov.in or call the India Cybercrime Helpline: 1930. This protects others too."
+            "detail": "File a complaint at cybercrime.gov.in or call the India Cybercrime Helpline: 1930."
         })
-
     elif score < 50:
         steps.append({
             "priority": "high",
-            "action": "Do NOT share personal details or money",
-            "detail": "High-risk signals detected. Never provide Aadhaar, bank details, or pay any kind of fee to this sender."
+            "action": "Do NOT share personal details or send money",
+            "detail": "High-risk signals found. Never provide Aadhaar, bank details, or pay any kind of fee to this sender."
         })
         steps.append({
             "priority": "high",
             "action": "Verify the organization independently",
-            "detail": "Search the company name on Google and LinkedIn. Contact them only via their officially published website or phone — not the details in this image."
+            "detail": "Search the company on Google and LinkedIn. Contact them only via their officially published website or phone — not the details in this image."
         })
-
     elif score < 65:
         steps.append({
             "priority": "medium",
             "action": "Cross-check before responding",
-            "detail": "Look up the sender on Naukri, Internshala, or LinkedIn. Confirm the opportunity exists on their official channels."
+            "detail": "Look up the sender on Naukri, Internshala, or LinkedIn and confirm the opportunity through official channels."
         })
 
-    # Fee / payment mentioned
     if entities.get("money") or "Fee / Payment Detected" in all_risk_cats:
         steps.append({
             "priority": "critical",
             "action": "Refuse any payment request",
-            "detail": "Legitimate internships and jobs never charge application, training, kit, or security deposit fees. Any such demand is a scam red flag."
+            "detail": "Legitimate internships and jobs NEVER charge application, training, kit, or security deposit fees. Any such demand is a scam."
         })
 
-    # Urgency or fake claims
     if "Fake Urgency" in all_risk_cats or "Fake Opportunity Claims" in all_risk_cats:
         steps.append({
             "priority": "high",
             "action": "Ignore pressure and exaggerated promises",
-            "detail": "Real employers don't set 24-hour deadlines or guarantee salaries of lakhs. Urgency is designed to make you act before thinking."
+            "detail": "Real employers don't set 24-hour deadlines or guarantee lakhs of salary. Urgency prevents you from thinking clearly."
         })
 
-    # Scam keywords
     if "Scam Keywords" in high_cats:
         steps.append({
             "priority": "high",
-            "action": "Never pay upfront fees",
-            "detail": "Processing fees, security deposits, and training charges are classic scam tactics. No genuine offer requires this."
+            "action": "Never pay any upfront fee",
+            "detail": "Processing fees, deposits, and training charges are classic scam tactics. No genuine offer requires this."
         })
 
-    # Phone numbers found
     if entities.get("phones"):
         steps.append({
             "priority": "medium",
             "action": "Verify phone numbers before calling",
-            "detail": f"Number(s) found: {', '.join(entities['phones'][:3])}. Search on Truecaller or the company's official site to confirm legitimacy."
+            "detail": f"Number(s) found: {', '.join(entities['phones'][:3])}. Check on Truecaller or the company's official site first."
         })
 
-    # Suspicious emails
     if entities.get("emails"):
         suspicious = [e for e in entities["emails"] if any(e.lower().endswith("@" + d) for d in FREE_EMAIL_DOMAINS)]
         if suspicious:
             steps.append({
                 "priority": "high",
                 "action": "Be wary of free email addresses",
-                "detail": f"Free email(s) found: {', '.join(suspicious[:2])}. Genuine companies always use official domain emails (@company.com), not Gmail or Yahoo."
+                "detail": f"Free email(s) found: {', '.join(suspicious[:2])}. Real companies use official domain emails (@company.com), not Gmail or Yahoo."
             })
         else:
             steps.append({
                 "priority": "low",
                 "action": "Confirm the email domain",
-                "detail": f"Email(s) detected: {', '.join(entities['emails'][:2])}. Make sure the domain matches the company's official website."
+                "detail": f"Email(s) detected: {', '.join(entities['emails'][:2])}. Verify it matches the company's official website."
             })
 
-    # URLs found
     if entities.get("urls"):
         steps.append({
             "priority": "medium",
             "action": "Check all links before clicking",
-            "detail": f"URL(s) in image: {', '.join(entities['urls'][:2])}. Paste each into the URL Checker tab in this tool to verify them first."
+            "detail": f"URL(s) in image: {', '.join(entities['urls'][:2])}. Paste into the URL Checker tab in this tool to verify first."
         })
 
-    # Safe score — still advise caution
     if score >= 75:
         steps.append({
             "priority": "low",
-            "action": "Confirm via official channels anyway",
-            "detail": "The image appears relatively safe, but always verify the opportunity directly on the company's official website or through a known contact."
+            "action": "Still confirm through official channels",
+            "detail": "Even if content looks safe, always verify the opportunity directly on the company's official website or through a known contact."
         })
 
     return steps
@@ -252,21 +205,21 @@ def generate_next_steps(score: int, flags: list, entities: dict) -> list:
 
 def analyze_image(image_base64: str) -> dict:
     """
-    Full-pipeline image analysis:
-    1. Multi-mode OCR with preprocessing
+    Fast image analysis pipeline:
+    1. Resize + 2-variant OCR (4 total passes)
     2. Entity extraction (phones, emails, URLs, money)
-    3. Scam text analysis with additional entity-based scoring
+    3. Scam text analysis + entity scoring
     4. Actionable next steps
     """
     try:
-        # Decode base64
+        # Decode
         if "," in image_base64:
             image_base64 = image_base64.split(",", 1)[1]
         image_bytes = base64.b64decode(image_base64)
-        image = Image.open(io.BytesIO(image_bytes))
+        image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
 
-        # Enhanced multi-mode OCR
-        extracted_text = extract_text_best(image)
+        # OCR
+        extracted_text = extract_text_fast(image)
 
         if not extracted_text or len(extracted_text.split()) < 3:
             return {
@@ -275,17 +228,17 @@ def analyze_image(image_base64: str) -> dict:
                 "flags": [{
                     "category": "OCR Extraction",
                     "severity": "medium",
-                    "message": "Could not extract readable text. Try a clearer, higher-resolution screenshot with visible text.",
+                    "message": "Could not extract readable text. Upload a clearer, sharper screenshot with visible text.",
                 }],
                 "scamKeywordsFound": [],
-                "summary": "No text could be extracted. The image may be too blurry, low-resolution, or contain only graphics.",
+                "summary": "No text could be extracted. The image may be blurry, low-resolution, or contain only graphics.",
                 "inputType": "image",
                 "extractedText": "",
                 "entities": {},
                 "nextSteps": [{
                     "priority": "medium",
                     "action": "Upload a clearer image",
-                    "detail": "Ensure the screenshot is sharp and text is legible. Zoom into the relevant section before capturing."
+                    "detail": "Make sure the screenshot is sharp and text is visible. Zoom into the relevant section before capturing."
                 }],
             }
 
@@ -299,27 +252,25 @@ def analyze_image(image_base64: str) -> dict:
         # Core scam text analysis
         result = analyze_text(extracted_text, input_type="image")
 
-        # Insert OCR success flag at the top
         word_count = len(extracted_text.split())
         result["flags"].insert(0, {
             "category": "OCR Extraction",
             "severity": "low",
-            "message": f"Successfully extracted {word_count} word(s) from the image using enhanced multi-mode OCR.",
+            "message": f"Successfully extracted {word_count} word(s) from the image using enhanced OCR.",
         })
 
-        # --- Additional entity-based scoring ---
         score = result["trustScore"]
 
-        # Money amounts in image → high risk
+        # Money amounts → high risk penalty
         if money:
             score = max(0, score - 20)
             result["flags"].insert(1, {
                 "category": "Fee / Payment Detected",
                 "severity": "high",
-                "message": f"Money amount(s) detected in image: {', '.join(money[:4])}. Legitimate opportunities never demand upfront payments. −20 points.",
+                "message": f"Payment/fee amount(s) found: {', '.join(money[:3])}. Legitimate opportunities never require upfront fees. −20 points.",
             })
 
-        # Free email domains in image → high risk
+        # Free email providers → penalty
         if emails:
             suspicious_emails = [e for e in emails if any(e.lower().endswith("@" + d) for d in FREE_EMAIL_DOMAINS)]
             if suspicious_emails:
@@ -341,83 +292,16 @@ def analyze_image(image_base64: str) -> dict:
             result["flags"].append({
                 "category": "Phone Numbers Detected",
                 "severity": "low",
-                "message": f"Phone number(s) extracted: {', '.join(phones[:3])}. Verify on Truecaller or official company directories before calling.",
+                "message": f"Phone number(s) extracted: {', '.join(phones[:3])}. Verify on Truecaller or official directories before calling.",
             })
 
-        # URLs — domain age check + prompt to use URL checker
+        # URLs — informational
         if urls:
             result["flags"].append({
                 "category": "Links Detected",
                 "severity": "medium",
                 "message": f"URL(s) found in image: {', '.join(urls[:2])}. Use the URL Checker tab to verify before visiting.",
             })
-            # Check domain age for the first extracted URL
-            try:
-                first_url = urls[0]
-                if not first_url.startswith("http"):
-                    first_url = "https://" + first_url
-                parsed = urlparse(first_url)
-                link_domain = (parsed.hostname or "").lstrip("www.")
-                if link_domain:
-                    age_days, _ = get_domain_age(link_domain)
-                    if age_days is None:
-                        score = max(0, score - 15)
-                        result["flags"].append({
-                            "category": "Link Domain Age",
-                            "severity": "high",
-                            "message": f"Cannot verify registration age of '{link_domain}'. Hidden WHOIS data is common among scam domains. −15 points.",
-                        })
-                    elif age_days < 180:
-                        score = max(0, score - 20)
-                        result["flags"].append({
-                            "category": "Link Domain Age",
-                            "severity": "high",
-                            "message": f"Link domain '{link_domain}' is only {age_days} day(s) old — under 6 months. Newly created domains are a major red flag. −20 points.",
-                        })
-                    elif age_days < 365:
-                        score = max(0, score - 5)
-                        result["flags"].append({
-                            "category": "Link Domain Age",
-                            "severity": "medium",
-                            "message": f"Link domain '{link_domain}' is {age_days} days old (under 1 year). Proceed with caution. −5 points.",
-                        })
-                    else:
-                        result["flags"].append({
-                            "category": "Link Domain Age",
-                            "severity": "low",
-                            "message": f"Link domain '{link_domain}' has been registered for {age_days} days ({age_days // 365} year(s)). Established age is a positive signal.",
-                        })
-            except Exception:
-                pass
-
-        # Domain age for extracted email domains
-        elif emails and not urls:
-            try:
-                first_email_domain = emails[0].split("@")[-1].lower()
-                if first_email_domain not in FREE_EMAIL_DOMAINS:
-                    age_days, _ = get_domain_age(first_email_domain)
-                    if age_days is None:
-                        score = max(0, score - 10)
-                        result["flags"].append({
-                            "category": "Email Domain Age",
-                            "severity": "high",
-                            "message": f"Cannot verify age of email domain '{first_email_domain}'. Scam operators often hide WHOIS data. −10 points.",
-                        })
-                    elif age_days < 180:
-                        score = max(0, score - 15)
-                        result["flags"].append({
-                            "category": "Email Domain Age",
-                            "severity": "high",
-                            "message": f"Email domain '{first_email_domain}' is only {age_days} day(s) old. Very new domains are a strong scam indicator. −15 points.",
-                        })
-                    else:
-                        result["flags"].append({
-                            "category": "Email Domain Age",
-                            "severity": "low",
-                            "message": f"Email domain '{first_email_domain}' has been active for {age_days} days ({age_days // 365} year(s)). Established age is a positive signal.",
-                        })
-            except Exception:
-                pass
 
         # Clamp and re-grade
         score = max(0, min(100, score))
@@ -430,35 +314,19 @@ def analyze_image(image_base64: str) -> dict:
         elif score >= 35: result["grade"] = "D"
         else:             result["grade"] = "F"
 
-        # Recalculate summary
         if score < 50:
-            result["summary"] = (
-                f"HIGH RISK — Trust score {score}/100. "
-                "Multiple red flags detected in this image. Do NOT engage, share details, or pay anything."
-            )
+            result["summary"] = f"HIGH RISK — Trust score {score}/100. Multiple red flags detected. Do NOT engage, share personal details, or pay anything."
         elif score < 65:
-            result["summary"] = (
-                f"Suspicious content — Trust score {score}/100. "
-                "Verify this independently through official channels before responding."
-            )
+            result["summary"] = f"Suspicious content — Trust score {score}/100. Verify independently before responding."
         elif score < 80:
-            result["summary"] = (
-                f"Some warning signs present — Trust score {score}/100. "
-                "Proceed with caution and double-check through official sources."
-            )
+            result["summary"] = f"Some warning signs present — Trust score {score}/100. Proceed with caution and verify through official sources."
         else:
-            result["summary"] = (
-                f"Image content appears relatively safe — Trust score {score}/100. "
-                "Always confirm through official channels."
-            )
-
-        # Generate next steps
-        next_steps = generate_next_steps(score, result["flags"], entities)
+            result["summary"] = f"Image content appears relatively safe — Trust score {score}/100. Still confirm through official channels."
 
         result["extractedText"] = extracted_text
         result["inputType"] = "image"
         result["entities"] = entities
-        result["nextSteps"] = next_steps
+        result["nextSteps"] = generate_next_steps(score, result["flags"], entities)
 
         return result
 
@@ -467,9 +335,9 @@ def analyze_image(image_base64: str) -> dict:
             "trustScore": 50,
             "grade": "C",
             "flags": [{
-                "category": "OCR",
+                "category": "Processing Error",
                 "severity": "medium",
-                "message": f"Image processing error: {str(e)[:150]}. Ensure the file is a valid PNG/JPG.",
+                "message": f"Image processing error: {str(e)[:150]}. Ensure the file is a valid PNG or JPG.",
             }],
             "scamKeywordsFound": [],
             "summary": "Could not process the image.",

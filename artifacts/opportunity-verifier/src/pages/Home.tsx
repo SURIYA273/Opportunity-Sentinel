@@ -103,17 +103,31 @@ export default function Home() {
 
   const handleImageUpload = (file: File) => {
     if (!file.type.startsWith("image/")) return;
-    
-    // Preview
+
+    // Preview using object URL
     const previewUrl = URL.createObjectURL(file);
     setImagePreview(previewUrl);
 
-    // Base64 for API
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setImageBase64(reader.result as string);
+    // Compress + resize using canvas before encoding to base64
+    const img = new window.Image();
+    img.onload = () => {
+      const MAX = 1200;
+      let { width, height } = img;
+      if (width > MAX || height > MAX) {
+        const ratio = Math.min(MAX / width, MAX / height);
+        width = Math.round(width * ratio);
+        height = Math.round(height * ratio);
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d")!;
+      ctx.drawImage(img, 0, 0, width, height);
+      // Use JPEG at 0.82 quality for a good size/quality balance
+      const compressed = canvas.toDataURL("image/jpeg", 0.82);
+      setImageBase64(compressed);
     };
-    reader.readAsDataURL(file);
+    img.src = previewUrl;
   };
 
   const getSteps = () => {
@@ -140,7 +154,7 @@ export default function Home() {
           <div className="flex items-center gap-3 bg-card/40 backdrop-blur-md px-6 py-3 rounded-full border border-white/10 shadow-lg">
             <ShieldCheck className="w-8 h-8 text-primary" />
             <h1 className="text-2xl font-display font-bold tracking-wider">
-              Opp<span className="text-primary">Verifier</span>
+              Edu<span className="text-primary"> Trust AI</span>
             </h1>
           </div>
         </header>
