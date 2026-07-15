@@ -147,6 +147,67 @@ components:
           type: string
       required: [category, severity, message]
 
+    NextStep:
+      type: object
+      properties:
+        priority:
+          type: string
+          enum: [critical, high, medium, low]
+        action:
+          type: string
+        detail:
+          type: string
+      required: [priority, action, detail]
+
+    Entities:
+      type: object
+      properties:
+        phones:
+          type: array
+          items:
+            type: string
+        emails:
+          type: array
+          items:
+            type: string
+        urls:
+          type: array
+          items:
+            type: string
+        money:
+          type: array
+          items:
+            type: string
+
+    ScoreBreakdown:
+      type: object
+      properties:
+        domainAgeScore:
+          type: number
+        domainAgeMax:
+          type: number
+        contentRiskScore:
+          type: number
+        contentRiskMax:
+          type: number
+        socialProofScore:
+          type: number
+        socialProofMax:
+          type: number
+        securityOrAuthenticityScore:
+          type: number
+        securityOrAuthenticityMax:
+          type: number
+      required:
+        - domainAgeScore
+        - domainAgeMax
+        - contentRiskScore
+        - contentRiskMax
+        - socialProofScore
+        - socialProofMax
+        - securityOrAuthenticityScore
+        - securityOrAuthenticityMax
+
     AnalyzeResult:
       type: object
       properties:
@@ -175,6 +236,12 @@ components:
             type: string
         summary:
           type: string
+        nextSteps:
+          type: array
+          items:
+            $ref: "#/components/schemas/NextStep"
+        breakdown:
+          $ref: "#/components/schemas/ScoreBreakdown"
       required:
         - url
         - trustScore
@@ -185,6 +252,7 @@ components:
         - inputFieldCount
         - scamKeywordsFound
         - summary
+        - breakdown
 
     TextAnalysisResult:
       type: object
@@ -208,6 +276,14 @@ components:
         extractedText:
           type: string
           nullable: true
+        nextSteps:
+          type: array
+          items:
+            $ref: "#/components/schemas/NextStep"
+        entities:
+          $ref: "#/components/schemas/Entities"
+        breakdown:
+          $ref: "#/components/schemas/ScoreBreakdown"
       required:
         - trustScore
         - grade
@@ -215,6 +291,7 @@ components:
         - scamKeywordsFound
         - summary
         - inputType
+        - breakdown
 
     ErrorResponse:
       type: object
@@ -224,3 +301,4 @@ components:
         detail:
           type: string
       required: [error]
+

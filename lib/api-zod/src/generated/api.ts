@@ -21,6 +21,30 @@ export const AnalyzeUrlBody = zod.object({
   url: zod.string(),
 });
 
+export const NextStep = zod.object({
+  priority: zod.enum(["critical", "high", "medium", "low"]),
+  action: zod.string(),
+  detail: zod.string(),
+});
+
+export const Entities = zod.object({
+  phones: zod.array(zod.string()).optional(),
+  emails: zod.array(zod.string()).optional(),
+  urls: zod.array(zod.string()).optional(),
+  money: zod.array(zod.string()).optional(),
+});
+
+export const ScoreBreakdown = zod.object({
+  domainAgeScore: zod.number(),
+  domainAgeMax: zod.number(),
+  contentRiskScore: zod.number(),
+  contentRiskMax: zod.number(),
+  socialProofScore: zod.number(),
+  socialProofMax: zod.number(),
+  securityOrAuthenticityScore: zod.number(),
+  securityOrAuthenticityMax: zod.number(),
+});
+
 export const AnalyzeUrlResponse = zod.object({
   url: zod.string(),
   trustScore: zod.number(),
@@ -38,6 +62,8 @@ export const AnalyzeUrlResponse = zod.object({
   inputFieldCount: zod.number(),
   scamKeywordsFound: zod.array(zod.string()),
   summary: zod.string(),
+  nextSteps: zod.array(NextStep).optional(),
+  breakdown: ScoreBreakdown,
 });
 
 /**
@@ -66,6 +92,9 @@ export const AnalyzeTextResponse = zod.object({
   summary: zod.string(),
   inputType: zod.string(),
   extractedText: zod.string().nullish(),
+  nextSteps: zod.array(NextStep).optional(),
+  entities: Entities.optional(),
+  breakdown: ScoreBreakdown,
 });
 
 /**
@@ -91,4 +120,8 @@ export const AnalyzeImageResponse = zod.object({
   summary: zod.string(),
   inputType: zod.string(),
   extractedText: zod.string().nullish(),
+  nextSteps: zod.array(NextStep).optional(),
+  entities: Entities.optional(),
+  breakdown: ScoreBreakdown,
 });
+

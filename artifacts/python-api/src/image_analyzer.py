@@ -11,6 +11,9 @@ import pytesseract
 from text_analyzer import analyze_text
 
 
+pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+
+
 # ─── Constants ────────────────────────────────────────────────────────────────
 
 MAX_OCR_WIDTH = 1400   # resize images wider than this before OCR
@@ -240,6 +243,16 @@ def analyze_image(image_base64: str) -> dict:
                     "action": "Upload a clearer image",
                     "detail": "Make sure the screenshot is sharp and text is visible. Zoom into the relevant section before capturing."
                 }],
+                "breakdown": {
+                    "domainAgeScore": 10,
+                    "domainAgeMax": 20,
+                    "contentRiskScore": 20,
+                    "contentRiskMax": 40,
+                    "socialProofScore": 10,
+                    "socialProofMax": 20,
+                    "securityOrAuthenticityScore": 10,
+                    "securityOrAuthenticityMax": 20,
+                }
             }
 
         # Entity extraction
@@ -259,11 +272,21 @@ def analyze_image(image_base64: str) -> dict:
             "message": f"Successfully extracted {word_count} word(s) from the image using enhanced OCR.",
         })
 
-        score = result["trustScore"]
+        breakdown = result.get("breakdown", {
+            "domainAgeScore": 10,
+            "domainAgeMax": 20,
+            "contentRiskScore": 40,
+            "contentRiskMax": 40,
+            "socialProofScore": 10,
+            "socialProofMax": 20,
+            "securityOrAuthenticityScore": 20,
+            "securityOrAuthenticityMax": 20,
+        }).copy()
 
         # Money amounts → high risk penalty
         if money:
-            score = max(0, score - 20)
+            breakdown["securityOrAuthenticityScore"] = max(0, breakdown["securityOrAuthenticityScore"] - 10)
+            breakdown["contentRiskScore"] = max(0, breakdown["contentRiskScore"] - 10)
             result["flags"].insert(1, {
                 "category": "Fee / Payment Detected",
                 "severity": "high",
@@ -274,7 +297,7 @@ def analyze_image(image_base64: str) -> dict:
         if emails:
             suspicious_emails = [e for e in emails if any(e.lower().endswith("@" + d) for d in FREE_EMAIL_DOMAINS)]
             if suspicious_emails:
-                score = max(0, score - 15)
+                breakdown["securityOrAuthenticityScore"] = max(0, breakdown["securityOrAuthenticityScore"] - 15)
                 result["flags"].append({
                     "category": "Free Email in Image",
                     "severity": "high",
@@ -304,6 +327,7 @@ def analyze_image(image_base64: str) -> dict:
             })
 
         # Clamp and re-grade
+        score = breakdown["domainAgeScore"] + breakdown["contentRiskScore"] + breakdown["socialProofScore"] + breakdown["securityOrAuthenticityScore"]
         score = max(0, min(100, score))
         result["trustScore"] = score
 
@@ -327,6 +351,7 @@ def analyze_image(image_base64: str) -> dict:
         result["inputType"] = "image"
         result["entities"] = entities
         result["nextSteps"] = generate_next_steps(score, result["flags"], entities)
+        result["breakdown"] = breakdown
 
         return result
 
@@ -345,4 +370,14 @@ def analyze_image(image_base64: str) -> dict:
             "extractedText": "",
             "entities": {},
             "nextSteps": [],
+            "breakdown": {
+                "domainAgeScore": 10,
+                "domainAgeMax": 20,
+                "contentRiskScore": 20,
+                "contentRiskMax": 40,
+                "socialProofScore": 10,
+                "socialProofMax": 20,
+                "securityOrAuthenticityScore": 10,
+                "securityOrAuthenticityMax": 20,
+            }
         }

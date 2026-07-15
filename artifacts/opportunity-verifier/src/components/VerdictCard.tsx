@@ -35,6 +35,16 @@ export interface UnifiedResult {
   inputType?: string;
   nextSteps?: NextStep[];
   entities?: Entities;
+  breakdown?: {
+    domainAgeScore: number;
+    domainAgeMax: number;
+    contentRiskScore: number;
+    contentRiskMax: number;
+    socialProofScore: number;
+    socialProofMax: number;
+    securityOrAuthenticityScore: number;
+    securityOrAuthenticityMax: number;
+  };
 }
 
 interface VerdictCardProps {
@@ -114,6 +124,66 @@ export function VerdictCard({ result, onReset }: VerdictCardProps) {
             <Gauge value={result.trustScore} />
           </div>
         </div>
+
+        {/* Score Breakdown Section */}
+        {result.breakdown && (
+          <div>
+            <h3 className="text-xl font-display font-bold mb-6 flex items-center gap-2">
+              <ShieldCheck className="w-6 h-6 text-primary" />
+              Trust Score Breakdown
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {[
+                {
+                  label: "Domain Age",
+                  score: result.breakdown.domainAgeScore,
+                  max: result.breakdown.domainAgeMax,
+                  colorClass: "bg-emerald-500",
+                  textClass: "text-emerald-400"
+                },
+                {
+                  label: "Content Risk",
+                  score: result.breakdown.contentRiskScore,
+                  max: result.breakdown.contentRiskMax,
+                  colorClass: "bg-primary",
+                  textClass: "text-primary"
+                },
+                {
+                  label: "Social Proof",
+                  score: result.breakdown.socialProofScore,
+                  max: result.breakdown.socialProofMax,
+                  colorClass: "bg-purple-500",
+                  textClass: "text-purple-400"
+                },
+                {
+                  label: "Security / Authenticity",
+                  score: result.breakdown.securityOrAuthenticityScore,
+                  max: result.breakdown.securityOrAuthenticityMax,
+                  colorClass: "bg-warning",
+                  textClass: "text-warning"
+                }
+              ].map((item, idx) => {
+                const percent = (item.score / item.max) * 100;
+                return (
+                  <div key={idx} className="p-5 rounded-2xl bg-secondary/40 border border-white/10 space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-semibold text-muted-foreground">{item.label}</span>
+                      <span className={cn("text-lg font-bold font-mono", item.textClass)}>
+                        {item.score}/{item.max}
+                      </span>
+                    </div>
+                    <div className="w-full bg-black/40 h-2 rounded-full overflow-hidden">
+                      <div 
+                        className={cn("h-full rounded-full transition-all duration-500", item.colorClass)}
+                        style={{ width: `${percent}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Entities Detected (Image only) */}
         {hasEntities && (

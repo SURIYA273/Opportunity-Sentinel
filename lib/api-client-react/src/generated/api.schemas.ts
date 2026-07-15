@@ -47,6 +47,30 @@ export interface ScamFlag {
   message: string;
 }
 
+export interface NextStep {
+  priority: "critical" | "high" | "medium" | "low";
+  action: string;
+  detail: string;
+}
+
+export interface Entities {
+  phones?: string[];
+  emails?: string[];
+  urls?: string[];
+  money?: string[];
+}
+
+export interface ScoreBreakdown {
+  domainAgeScore: number;
+  domainAgeMax: number;
+  contentRiskScore: number;
+  contentRiskMax: number;
+  socialProofScore: number;
+  socialProofMax: number;
+  securityOrAuthenticityScore: number;
+  securityOrAuthenticityMax: number;
+}
+
 export interface AnalyzeResult {
   url: string;
   trustScore: number;
@@ -58,6 +82,8 @@ export interface AnalyzeResult {
   inputFieldCount: number;
   scamKeywordsFound: string[];
   summary: string;
+  nextSteps?: NextStep[];
+  breakdown: ScoreBreakdown;
 }
 
 export interface TextAnalysisResult {
@@ -68,9 +94,13 @@ export interface TextAnalysisResult {
   summary: string;
   inputType: string;
   extractedText?: string | null;
+  nextSteps?: NextStep[];
+  entities?: Entities;
+  breakdown: ScoreBreakdown;
 }
 
 export interface ErrorResponse {
   error: string;
   detail?: string;
 }
+
